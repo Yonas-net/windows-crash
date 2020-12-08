@@ -92,8 +92,8 @@ func ProcessIncomingConnection(conn net.Conn) {
 			log.Printf("SERVER: Connection: Starting reading Error: %s", err)
 			break
 		}
+
 		log.Printf("SERVER: Connection: Received %q\n", string(buf[:n]))
-		n, err = conn.Write(buf[:n])
 
 		n, err = conn.Write(buf[:n])
 		log.Printf("SERVER: Connection: Sending %d bytes", n)
@@ -103,5 +103,6 @@ func ProcessIncomingConnection(conn net.Conn) {
 			break
 		}
 	}
+
 	log.Println("SERVER: Connection: Socket closed")
 }
