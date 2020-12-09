@@ -4,12 +4,20 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"windows-crash/lib/base"
 )
+
+type Decoder struct {
+	JSONRPC string
+	Method  string
+	Params  interface{}
+}
 
 func main() {
 	port := flag.Int("p", 0, "On which port the server starting to listen")
@@ -54,15 +62,17 @@ func main() {
 	}
 	config.Rand = rand.Reader
 	listenOn := fmt.Sprintf("%s%d", "0.0.0.0:", *port)
-	listener , err := tls.Listen("tcp", listenOn, &config)
-	if err != nil {
-		log.Fatalf("SERVER: listen: %s", err)
+	listener, er := tls.Listen("tcp", listenOn, &config)
+
+	if er != nil {
+		log.Fatalf("SERVER: Error while server starting to listen: %s", err)
 	}
 
 	log.Printf("%s%d%s", "SERVER: Started listening on '0.0.0.0:", *port, "'")
 
 	for  {
 		conn, err := listener.Accept()
+
 		if err != nil {
 			log.Printf("SERVER: Incoming Connection Error: %s", err)
 			break
@@ -72,6 +82,7 @@ func main() {
 		tlsCon, ok := conn.(*tls.Conn)
 		if ok {
 			log.Print("SERVER: Connection approved from Server")
+
 			state := tlsCon.ConnectionState()
 			for _, i := range state.PeerCertificates {
 				log.Print(x509.MarshalPKIXPublicKey(i.PublicKey))
@@ -84,19 +95,31 @@ func main() {
 
 func ProcessIncomingConnection(conn net.Conn) {
 	defer conn.Close()
-	buf := make([]byte, 512)
+
 	for {
 		log.Print("SERVER: Connection: Waiting for the client")
-		n, err := conn.Read(buf)
+
+		mes, err := base.ReadNetStringFromStream(conn, 1024 * 1024)
+
 		if err != nil {
 			log.Printf("SERVER: Connection: Starting reading Error: %s", err)
 			break
 		}
 
-		log.Printf("SERVER: Connection: Received %q\n", string(buf[:n]))
+		var decoder Decoder
+		err = json.Unmarshal(mes, &decoder)
 
-		n, err = conn.Write(buf[:n])
-		log.Printf("SERVER: Connection: Sending %d bytes", n)
+		if err != nil {
+			log.Fatalf("SERVER: Connection: Error while decoding JSRPC message. %s", err)
+		}
+
+		if decoder.Method == "icinga::Hello" {
+			log.Printf("SERVER: JsonRpcConnection: Received %q from the client\n", decoder.Method)
+		}
+
+		err = base.WriteNetStringToStream(conn, mes)
+
+		log.Printf("SERVER: Connection: Sending %d bytes message back", len(mes))
 
 		if err != nil {
 			log.Printf("SERVER: Connection: Sending data to the client Error: %s", err)
