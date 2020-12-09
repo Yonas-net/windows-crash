@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/Yonas-net/windows-crash/lib/base"
 	"io/ioutil"
 	"log"
+	math "math/rand"
 	"net"
-	"windows-crash/lib/base"
 )
 
 type Decoder struct {
@@ -19,28 +20,42 @@ type Decoder struct {
 	Params  interface{}
 }
 
+type Encoder struct {
+	JSONRPC string  `json:"jsonrpc"`
+	Method  string  `json:"method"`
+	Params  Updates `json:"params"`
+}
+
+type Updates struct {
+	Update    map[string]ConfigInfo `json:"update"`
+	Update_v2 map[string]ConfigInfo `json:"update_v2"`
+	Checksums map[string]ConfigInfo `json:"checksums"`
+}
+
+type ConfigInfo map[string]string
+
 func main() {
 	port := flag.Int("p", 0, "On which port the server starting to listen")
 	privKey := flag.String("pk", " ", "Private Key Certificate Chain")
-	pubKey := flag.String("puk", " ", "Certificate Chain")
-	caKey := flag.String("ck", " ", "CA")
+	pubKey := flag.String("crt", " ", "Certificate Chain")
+	caKey := flag.String("ca", " ", "CA")
+	zoneDir := flag.String("z", " ", "Zone name you want to sync to")
+	files   := flag.Int("f", 0, "Amount of files to be synced to the specified zone")
+
 	flag.Parse()
 
 	if *port == 0 {
 		log.Fatalln("SERVER: Port must not be empty")
 	}
 
-	if *privKey == " "  {
-		log.Fatalln("SERVER: Private Key must not be empty")
+	if *files == 0 {
+		log.Fatalln("SERVER: Amount of config files must not be empty")
 	}
 
-	if *pubKey == " " {
-		log.Fatalln("SERVER: Public Key must not be empty")
-	}
-
-	if *caKey == " " {
-		log.Fatalln("SERVER: CA must not be empty")
-	}
+	IsEmpty(privKey, "pk")
+	IsEmpty(pubKey, "crt")
+	IsEmpty(caKey, "ca")
+	IsEmpty(zoneDir, "z")
 
 	rootCAs, err := ioutil.ReadFile(*caKey)
 	if err != nil {
@@ -89,11 +104,11 @@ func main() {
 			}
 		}
 
-		go ProcessIncomingConnection(conn)
+		go ProcessIncomingConnection(conn, files, zoneDir)
 	}
 }
 
-func ProcessIncomingConnection(conn net.Conn) {
+func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
 	defer conn.Close()
 
 	for {
@@ -117,15 +132,59 @@ func ProcessIncomingConnection(conn net.Conn) {
 			log.Printf("SERVER: JsonRpcConnection: Received %q from the client\n", decoder.Method)
 		}
 
-		err = base.WriteNetStringToStream(conn, mes)
+		var encoder Encoder
+		encoder = Encoder{
+			JSONRPC: "2.0",
+			Method: "config::Update",
+			Params: Updates{
+				Update: map[string]ConfigInfo{
+					*zone: {},
+				},
+				Update_v2: map[string]ConfigInfo{
+					*zone: {},
+				},
+				Checksums: map[string]ConfigInfo{
+					*zone: {},
+				},
+			},
+		}
 
-		log.Printf("SERVER: Connection: Sending %d bytes message back", len(mes))
+		r := math.Intn(*files)
+		for i := 0; i < r; i++ {
+			file := GenerateFile("conf")
+
+			encoder.Params.Update[*zone][file] = " "
+			encoder.Params.Update_v2[*zone][file] = " "
+			encoder.Params.Checksums[*zone][file] = " "
+		}
+
+		mess, err := json.Marshal(&encoder)
+
+		if err != nil{
+			log.Fatalf("SERVER: JsonRpcConnection: Error while encoding JSRPC message. %s", err)
+		}
+
+		log.Printf("SERVER: JsonRpcConnection: Sending config::Update JSRPC message: %s", mess)
+
+		err = base.WriteNetStringToStream(conn, mess)
 
 		if err != nil {
-			log.Printf("SERVER: Connection: Sending data to the client Error: %s", err)
-			break
+			log.Fatalf("SERVER: JsonRpcConnection: Error while sending json encoded JSRPC message: %s", err)
 		}
 	}
 
 	log.Println("SERVER: Connection: Socket closed")
+}
+
+func IsEmpty(val *string, desc string)  {
+	if *val == " " {
+		log.Fatalf("SERVER: Required command line '%s' argment is empty\n", desc)
+	}
+}
+
+func GenerateFile(suffix string) string {
+	r := math.Intn(1000000)
+	fname := fmt.Sprintf("%d.%s", r, suffix)
+
+	return fname
 }
