@@ -160,7 +160,8 @@ func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
 		mess, err := json.Marshal(&encoder)
 
 		if err != nil{
-			log.Fatalf("SERVER: JsonRpcConnection: Error while encoding JSRPC message. %s", err)
+			log.Printf("SERVER: JsonRpcConnection: Error while encoding JSRPC message. %s", err)
+			continue
 		}
 
 		log.Printf("SERVER: JsonRpcConnection: Sending config::Update JSRPC message: %s", mess)
@@ -168,7 +169,8 @@ func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
 		err = base.WriteNetStringToStream(conn, mess)
 
 		if err != nil {
-			log.Fatalf("SERVER: JsonRpcConnection: Error while sending json encoded JSRPC message: %s", err)
+			log.Printf("SERVER: JsonRpcConnection: Error while sending json encoded JSRPC message: %s", err)
+			continue
 		}
 	}
 
