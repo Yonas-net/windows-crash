@@ -132,8 +132,7 @@ func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
 			log.Printf("SERVER: JsonRpcConnection: Received %q from the client\n", decoder.Method)
 		}
 
-		var encoder Encoder
-		encoder = Encoder{
+		encoder := &Encoder{
 			JSONRPC: "2.0",
 			Method: "config::Update",
 			Params: Updates{
