@@ -118,7 +118,6 @@ func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
 
 		if err != nil {
 			log.Printf("SERVER: Connection: Starting reading Error: %s", err)
-			break
 		}
 
 		var decoder Decoder
