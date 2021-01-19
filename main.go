@@ -33,16 +33,17 @@ type Updates struct {
 }
 
 type ConfigInfo map[string]string
+var Zones string
 
 func main() {
 	port := flag.Int("p", 0, "On which port the server starting to listen")
 	privKey := flag.String("pk", " ", "Private Key Certificate Chain")
 	pubKey := flag.String("crt", " ", "Certificate Chain")
 	caKey := flag.String("ca", " ", "CA")
-	zoneDir := flag.String("z", " ", "Zone name you want to sync to")
 	files   := flag.Int("f", 0, "Amount of files to be synced to the specified zone")
-
+	flag.StringVar(&Zones, "z", " ", "Zone name you want to sync to.")
 	flag.Parse()
+	zoneDir := flag.Args()
 
 	if *port == 0 {
 		log.Fatalln("SERVER: Port must not be empty")
@@ -55,7 +56,6 @@ func main() {
 	IsEmpty(privKey, "pk")
 	IsEmpty(pubKey, "crt")
 	IsEmpty(caKey, "ca")
-	IsEmpty(zoneDir, "z")
 
 	rootCAs, err := ioutil.ReadFile(*caKey)
 	if err != nil {
@@ -104,11 +104,13 @@ func main() {
 			}
 		}
 
-		go ProcessIncomingConnection(conn, files, zoneDir)
+		for zone, _ := range zoneDir {
+			go ProcessIncomingConnection(conn, files, zoneDir[zone])
+		}
 	}
 }
 
-func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
+func ProcessIncomingConnection(conn net.Conn, files *int, zone string) {
 	defer conn.Close()
 
 	for {
@@ -136,13 +138,13 @@ func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
 			Method: "config::Update",
 			Params: Updates{
 				Update: map[string]ConfigInfo{
-					*zone: {},
+					zone: {},
 				},
 				Update_v2: map[string]ConfigInfo{
-					*zone: {},
+					zone: {},
 				},
 				Checksums: map[string]ConfigInfo{
-					*zone: {},
+					zone: {},
 				},
 			},
 		}
@@ -151,9 +153,9 @@ func ProcessIncomingConnection(conn net.Conn, files *int, zone *string) {
 		for i := 0; i < r; i++ {
 			file := GenerateFile("conf")
 
-			encoder.Params.Update[*zone][file] = " "
-			encoder.Params.Update_v2[*zone][file] = " "
-			encoder.Params.Checksums[*zone][file] = " "
+			encoder.Params.Update[zone][file] = " "
+			encoder.Params.Update_v2[zone][file] = " "
+			encoder.Params.Checksums[zone][file] = " "
 		}
 
 		mess, err := json.Marshal(&encoder)
